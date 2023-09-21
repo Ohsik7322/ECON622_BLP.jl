@@ -2,9 +2,11 @@ module Integrate
 
 using Distributions
 import Sobol: skip, SobolSeq
-import Base.Iterators: take, Repeated
+import Base.Iterators: take, Repeated, product, repeated
 import HCubature: hcubature
 import LinearAlgebra: cholesky
+import FastGaussQuadrature: gausshermite
+import SparseGrids: sparsegrid
 
 abstract type AbstractIntegrator end
 
@@ -32,6 +34,34 @@ function QuasiMonteCarloIntegrator(distribution::AbstractMvNormal, ndraw=100)
     FixedNodeIntegrator(x,w)
 end 
 
+struct QuadratureIntegrator{QX, QW, QL, Qμ, QDX} <: AbstractIntegrator
+    X::QX
+    W::QW
+    L::QL
+    μ::Qμ
+    dx::QDX
+end
+
+(∫::QuadratureIntegrator)(f::Function) = sum(f(√2*∫.L*vcat(x...)+∫.μ)*w for (x,w) ∈ zip(∫.X, ∫.W))/(π^(∫.dx/2))
+
+function QuadratureIntegrator(dist::AbstractMvNormal, ndraw = 100)
+    n = Int(ceil(ndraw^(1/length(dist))))
+    x_1, w_1 = gausshermite(n)
+    X = product(repeated(x_1, length(dist))...)
+    W = prod.(product(repeated(w_1, length(dist))...))
+    L = cholesky(dist.Σ).L
+    μ = dist.μ
+    dx = length(dist)
+    QuadratureIntegrator(X,W,L,μ,dx)
+end
+
+function SparseQIntegrator(dist::AbstractMvNormal, order=5)
+    X,W = sparsegrid(length(dist), order, gausshermite, sym=true)
+    L = cholesky(dist.Σ).L
+    μ = dist.μ
+    dx = length(dist)
+    QuadratureIntegrator(X,W,L,μ,dx)
+end
 
 struct AdaptiveIntegrator{FE,FT,FJ,A,L} <: AbstractIntegrator
     eval::FE

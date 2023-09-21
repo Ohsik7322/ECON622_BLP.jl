@@ -11,17 +11,25 @@ using Test
     ∫a = Integrate.AdaptiveIntegrator(dx, options=(rtol=1e-6,initdiv=3))        
     V = ∫a(x->x*x')
     @test isapprox(V, Σ, rtol=1e-5)
-    
+    ∫sq = Integrate.SparseQIntegrator(dx)
+    @test isapprox(∫sq(x->x*x'), Σ, rtol=1e-5)
+
     val = ∫a(f)
+
     for N ∈ [1_000, 10_000, 100_000]
         ∫mc = Integrate.MonteCarloIntegrator(dx, N)
-        ∫qmc = Integrate.QuasiMonteCarloIntegrator(dx,N)        
+        ∫qmc = Integrate.QuasiMonteCarloIntegrator(dx,N)
+        ∫q = Integrate.QuadratureIntegrator(dx, N)
+        
         @test isapprox(∫mc(x->x*x'), Σ, rtol=10/sqrt(N))
         @test isapprox(∫qmc(x->x*x'), Σ, rtol=10/sqrt(N))
+        @test isapprox(∫q(x->x*x'), Σ, rtol=10/sqrt(N))
 
         f(x) = exp(x[1])/sum(exp.(x))        
         @test isapprox(∫mc(f),val,rtol=1/sqrt(N))
         @test isapprox(∫qmc(f),val,rtol=1/sqrt(N))
+        @test isapprox(∫q(f),val,rtol=1/sqrt(N))
+        @test isapprox(∫sq(f), val, rtol=1e-5)
     end
 end
 
@@ -51,4 +59,4 @@ end
     d = BLP.delta(s, Σ, X, ∫)
     @test isapprox(d, δ, rtol=1e-6)
     
-end
+    end
